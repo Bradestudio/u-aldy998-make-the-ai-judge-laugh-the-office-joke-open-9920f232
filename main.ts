@@ -26,7 +26,7 @@
 // /output:
 //   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
 
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const out = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
@@ -45,6 +45,23 @@ if (JOKE.trim().length === 0 || /[\r\n]/.test(JOKE)) {
 }
 
 mkdirSync(out, { recursive: true });
-writeFileSync(join(out, 'entry.txt'), JOKE, 'utf8');
+const entryPath = join(out, 'entry.txt');
+writeFileSync(entryPath, JOKE, 'utf8');
+
+// Revision: read the file back and verify it byte-for-byte against
+// the joke constant, so a truncated or mangled write can never slip
+// through silently. Compare the decoded string and the raw bytes:
+// the em dash is 3 bytes in UTF-8, so byte length != char length.
+const written = readFileSync(entryPath);
+const readBack = written.toString('utf8');
+const expectedBytes = Buffer.from(JOKE, 'utf8');
+if (readBack !== JOKE || !written.equals(expectedBytes)) {
+  throw new Error(
+    `entry.txt verification failed: read back ${readBack.length} characters / ${written.length} bytes, expected ${JOKE.length} characters / ${expectedBytes.length} bytes`,
+  );
+}
 
 console.log(`wrote entry.txt (${JOKE.length} characters): ${JOKE}`);
+console.log(
+  `verified entry.txt: ${readBack.length} characters, ${written.length} bytes, byte-for-byte match: OK`,
+);
